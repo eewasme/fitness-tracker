@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fitness Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+
+  <section id="authView" class="auth-shell">
+    <div class="auth-card">
+      <div class="brand"><span class="brand-mark">♥</span><span>Fitness Tracker</span></div>
+      <h1>Ton suivi santé, simplement.</h1>
+      <p class="muted">Poids, calories, pas, sport et sommeil dans un seul tableau de bord.</p>
+      <form id="authForm">
+        <label>Email<input id="email" type="email" required autocomplete="email"></label>
+        <label>Mot de passe<input id="password" type="password" required minlength="6" autocomplete="current-password"></label>
+        <div class="auth-actions">
+          <button class="btn primary" id="loginBtn" type="submit">Se connecter</button>
+          <button class="btn ghost" id="signupBtn" type="button">Créer un compte</button>
+        </div>
+      </form>
+      <p id="authMessage" class="small muted"></p>
+    </div>
+  </section>
+
+  <section id="appView" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">♥</span><span>Fitness Tracker</span></div>
+      <nav>
+        <button class="nav-item active" data-section="dashboard">⌂ <span>Dashboard</span></button>
+        <button class="nav-item" data-section="entry">＋ <span>Saisie du jour</span></button>
+        <button class="nav-item" data-section="history">☷ <span>Historique</span></button>
+      </nav>
+      <div class="sidebar-bottom">
+        <button id="themeBtn" class="nav-item">◐ <span>Mode sombre</span></button>
+        <button id="logoutBtn" class="nav-item">↪ <span>Déconnexion</span></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">SUIVI PERSONNEL</p>
+          <h2 id="pageTitle">Dashboard</h2>
+        </div>
+        <button class="btn primary" id="quickEntryBtn">＋ Ajouter une journée</button>
+      </header>
+
+      <section id="dashboardSection" class="section">
+        <div class="range-tabs">
+          <button data-days="7" class="range active">7 jours</button>
+          <button data-days="30" class="range">30 jours</button>
+          <button data-days="90" class="range">3 mois</button>
+          <button data-days="365" class="range">1 an</button>
+        </div>
+
+        <div class="cards">
+          <article class="stat-card"><div class="stat-icon">⚖</div><div><span>Poids</span><strong id="weightStat">—</strong><small>kg</small></div></article>
+          <article class="stat-card"><div class="stat-icon">🔥</div><div><span>Calories brûlées</span><strong id="burnStat">—</strong><small>kcal</small></div></article>
+          <article class="stat-card"><div class="stat-icon">🍽</div><div><span>Calories intake</span><strong id="intakeStat">—</strong><small>kcal</small></div></article>
+          <article class="stat-card"><div class="stat-icon">👟</div><div><span>Pas</span><strong id="stepsStat">—</strong><small>pas</small></div></article>
+          <article class="stat-card"><div class="stat-icon">😴</div><div><span>Sommeil</span><strong id="sleepStat">—</strong><small>heures</small></div></article>
+        </div>
+
+        <div class="chart-grid">
+          <article class="panel chart-panel"><div class="panel-head"><div><h3>Évolution du poids</h3><span>kg</span></div></div><canvas id="weightChart"></canvas></article>
+          <article class="panel chart-panel"><div class="panel-head"><div><h3>Calories brûlées</h3><span>kcal / jour</span></div></div><canvas id="burnChart"></canvas></article>
+          <article class="panel chart-panel"><div class="panel-head"><div><h3>Nombre de pas</h3><span>pas / jour</span></div></div><canvas id="stepsChart"></canvas></article>
+          <article class="panel chart-panel"><div class="panel-head"><div><h3>Sommeil</h3><span>heures / nuit</span></div></div><canvas id="sleepChart"></canvas></article>
+        </div>
+      </section>
+
+      <section id="entrySection" class="section hidden">
+        <div class="panel form-panel">
+          <div class="panel-head"><div><h3 id="formTitle">Ajouter une journée</h3><span>Toutes les données restent enregistrées dans la base.</span></div></div>
+          <form id="dailyForm" class="form-grid">
+            <input type="hidden" id="editingId">
+            <label>Date<input id="date" type="date" required></label>
+            <label>Poids (kg)<input id="weight" type="number" step="0.1" min="0"></label>
+            <label>Calories consommées<input id="caloriesIntake" type="number" step="1" min="0"></label>
+            <label>Calories brûlées<input id="caloriesBurned" type="number" step="1" min="0"></label>
+            <label>Nombre de pas<input id="steps" type="number" step="1" min="0"></label>
+            <label>Sommeil (heures)<input id="sleepHours" type="number" step="0.1" min="0" max="24"></label>
+            <label class="full">Notes<textarea id="notes" rows="3" placeholder="Commentaire, ressenti, repas particulier…"></textarea></label>
+            <div class="full form-actions"><button class="btn primary" type="submit">Enregistrer</button><button class="btn ghost" type="button" id="cancelEdit">Annuler</button></div>
+          </form>
+        </div>
+
+        <div class="panel form-panel">
+          <div class="panel-head"><div><h3>Activités sportives</h3><span>Ajoute les séances de cette journée.</span></div></div>
+          <form id="activityForm" class="form-grid">
+            <label>Date<input id="activityDate" type="date" required></label>
+            <label>Activité<input id="activityType" placeholder="Course, musculation, vélo…" required></label>
+            <label>Durée (minutes)<input id="activityDuration" type="number" min="1" step="1"></label>
+            <label>Calories brûlées<input id="activityCalories" type="number" min="0" step="1"></label>
+            <label class="full">Notes<input id="activityNotes" placeholder="Optionnel"></label>
+            <div class="full form-actions"><button class="btn primary" type="submit">Ajouter l'activité</button></div>
+          </form>
+          <div id="activityList" class="activity-list"></div>
+        </div>
+      </section>
+
+      <section id="historySection" class="section hidden">
+        <div class="panel">
+          <div class="panel-head"><div><h3>Historique</h3><span>Modifie ou supprime tes journées.</span></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Poids</th><th>Calories</th><th>Brûlées</th><th>Pas</th><th>Sommeil</th><th></th></tr></thead><tbody id="historyBody"></tbody></table></div>
+        </div>
+      </section>
+    </main>
+  </section>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
