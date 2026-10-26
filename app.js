@@ -1,1 +1,107 @@
-const cfg=window.APP_CONFIG;if(!cfg?.SUPABASE_URL||!cfg?.SUPABASE_ANON_KEY)throw Error("Configuration Supabase manquante");const db=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);let user=null,days=7,charts={};const $=id=>document.getElementById(id),today=()=>new Date().toISOString().slice(0,10),num=id=>$(id).value===""?null:Number($(id).value),toast=m=>{let t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2400)};function section(n){document.querySelectorAll(".section").forEach(x=>x.classList.add("hidden"));$(n+"Section").classList.remove("hidden");document.querySelectorAll(".nav-item[data-section]").forEach(x=>x.classList.toggle("active",x.dataset.section===n));$("pageTitle").textContent=n==="dashboard"?"Dashboard":n==="entry"?"Saisie du jour":"Historique";if(n==="dashboard")dashboard();if(n==="history")history();if(n==="entry")activities($("activityDate").value||today())}document.querySelectorAll(".nav-item[data-section]").forEach(x=>x.onclick=()=>section(x.dataset.section));$("quickEntryBtn").onclick=()=>section("entry");$("themeBtn").onclick=()=>{document.body.classList.toggle("dark");localStorage.fttheme=document.body.classList.contains("dark")?"dark":"light"};if(localStorage.fttheme==="dark")document.body.classList.add("dark");$("authForm").onsubmit=async e=>{e.preventDefault();let r=await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});$("authMessage").textContent=r.error?r.error.message:""};$("signupBtn").onclick=async()=>{let r=await db.auth.signUp({email:$("email").value.trim(),password:$("password").value});$("authMessage").textContent=r.error?r.error.message:"Compte créé. Vérifie ton email si nécessaire."};$("logoutBtn").onclick=()=>db.auth.signOut();db.auth.onAuthStateChange((_e,s)=>{user=s?.user||null;$("authView").classList.toggle("hidden",!!user);$("appView").classList.toggle("hidden",!user);if(user){$("date").value=today();$("activityDate").value=today();dashboard()}});document.querySelectorAll(".range").forEach(x=>x.onclick=()=>{document.querySelectorAll(".range").forEach(y=>y.classList.remove("active"));x.classList.add("active");days=+x.dataset.days;dashboard()});$("dailyForm").onsubmit=async e=>{e.preventDefault();let p={user_id:user.id,date:$("date").value,weight:num("weight"),calories_intake:num("caloriesIntake"),calories_burned:num("caloriesBurned"),steps:num("steps"),sleep_hours:num("sleepHours"),notes:$("notes").value.trim()||null},id=$("editingId").value,r=id?await db.from("daily_metrics").update(p).eq("id",id).eq("user_id",user.id):await db.from("daily_metrics").upsert(p,{onConflict:"user_id,date"});if(r.error)return toast(r.error.message);toast("Journée enregistrée ✓");resetForm();dashboard()};$("cancelEdit").onclick=resetForm;function resetForm(){$("editingId").value="";$("formTitle").textContent="Ajouter une journée";$("date").value=today();["weight","caloriesIntake","caloriesBurned","steps","sleepHours","notes"].forEach(x=>$(x).value="")}$("activityDate").onchange=()=>activities($("activityDate").value);$("activityForm").onsubmit=async e=>{e.preventDefault();let r=await db.from("activities").insert({user_id:user.id,date:$("activityDate").value,type:$("activityType").value.trim(),duration_minutes:num("activityDuration"),calories_burned:num("activityCalories"),notes:$("activityNotes").value.trim()||null});if(r.error)return toast(r.error.message);["activityType","activityDuration","activityCalories","activityNotes"].forEach(x=>$(x).value="");toast("Activité ajoutée ✓");activities($("activityDate").value)};async function getData(){let d=new Date();d.setDate(d.getDate()-(days-1));let r=await db.from("daily_metrics").select("*").eq("user_id",user.id).gte("date",d.toISOString().slice(0,10)).order("date");return r.data||[]}async function dashboard(){if(!user)return;let d=await getData(),last=[...d].reverse().find(x=>x.weight!=null),avg=k=>{let a=d.map(x=>x[k]).filter(x=>x!=null);return a.length?Math.round(a.reduce((s,v)=>s+Number(v),0)/a.length):null};$("weightStat").textContent=last?Number(last.weight).toLocaleString("fr-FR",{maximumFractionDigits:1}):"—";$("burnStat").textContent=avg("calories_burned")?.toLocaleString("fr-FR")||"—";$("intakeStat").textContent=avg("calories_intake")?.toLocaleString("fr-FR")||"—";$("stepsStat").textContent=avg("steps")?.toLocaleString("fr-FR")||"—";let sh=avg("sleep_hours");$("sleepStat").textContent=sh==null?"—":sh.toLocaleString("fr-FR",{maximumFractionDigits:1});chart("weightChart",d,"weight","kg");chart("burnChart",d,"calories_burned","kcal");chart("stepsChart",d,"steps","pas");chart("sleepChart",d,"sleep_hours","h")}function chart(id,d,k,u){if(charts[id])charts[id].destroy();charts[id]=new Chart($(id),{type:"line",data:{labels:d.map(x=>new Date(x.date+"T00:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"})),datasets:[{data:d.map(x=>x[k]),borderWidth:2,pointRadius:3,tension:.35,spanGaps:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.raw??"—"} ${u}`}}},scales:{x:{grid:{display:false}},y:{beginAtZero:k!=="weight"}}}})}async function history(){let r=await db.from("daily_metrics").select("*").eq("user_id",user.id).order("date",{ascending:false});if(r.error)return toast(r.error.message);$("historyBody").innerHTML=(r.data||[]).map(x=>`<tr><td>${new Date(x.date+"T00:00:00").toLocaleDateString("fr-FR")}</td><td>${x.weight??"—"}</td><td>${x.calories_intake??"—"}</td><td>${x.calories_burned??"—"}</td><td>${x.steps??"—"}</td><td>${x.sleep_hours??"—"}</td><td><button class="btn ghost edit" data-id="${x.id}">Modifier</button> <button class="btn danger del" data-id="${x.id}">Supprimer</button></td></tr>`).join("")||`<tr><td colspan="7">Aucune donnée.</td></tr>`;document.querySelectorAll(".edit").forEach(b=>b.onclick=()=>edit(b.dataset.id));document.querySelectorAll(".del").forEach(b=>b.onclick=()=>del(b.dataset.id))}async function edit(id){let r=await db.from("daily_metrics").select("*").eq("id",id).single();if(r.error)return toast(r.error.message);let x=r.data;$("editingId").value=x.id;$("formTitle").textContent="Modifier la journée";$("date").value=x.date;$("weight").value=x.weight??"";$("caloriesIntake").value=x.calories_intake??"";$("caloriesBurned").value=x.calories_burned??"";$("steps").value=x.steps??"";$("sleepHours").value=x.sleep_hours??"";$("notes").value=x.notes??"";section("entry")}async function del(id){if(!confirm("Supprimer cette journée ?"))return;let r=await db.from("daily_metrics").delete().eq("id",id).eq("user_id",user.id);if(r.error)toast(r.error.message);else{toast("Supprimé");history();dashboard()}}async function activities(date){let r=await db.from("activities").select("*").eq("user_id",user.id).eq("date",date).order("created_at",{ascending:false});if(r.error)return toast(r.error.message);$("activityList").innerHTML=(r.data||[]).map(a=>`<div class="activity-row"><div><b>${esc(a.type)}</b><br><small>${a.duration_minutes??"—"} min · ${a.calories_burned??"—"} kcal${a.notes?" · "+esc(a.notes):""}</small></div><button class="btn danger actdel" data-id="${a.id}">×</button></div>`).join("")||`<p class="muted small">Aucune activité pour cette date.</p>`;document.querySelectorAll(".actdel").forEach(b=>b.onclick=async()=>{await db.from("activities").delete().eq("id",b.dataset.id).eq("user_id",user.id);activities(date)})}function esc(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+let user=null, authMode="login", selectedRange=7, charts={};
+
+const $=id=>document.getElementById(id);
+const today=()=>new Date().toISOString().slice(0,10);
+const fmtDate=d=>new Intl.DateTimeFormat("fr-FR",{weekday:"short",day:"2-digit",month:"short"}).format(new Date(d+"T12:00:00"));
+const showToast=(m)=>{const t=$("toast");t.textContent=m;t.classList.add("show");setTimeout(()=>t.classList.remove("show"),2200)};
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+
+async function boot(){
+  const {data:{session}}=await db.auth.getSession();
+  if(session){user=session.user; showApp();} else showAuth();
+  db.auth.onAuthStateChange((_e,s)=>{user=s?.user||null; user?showApp():showAuth();});
+}
+function showAuth(){$("authScreen").classList.remove("hidden");$("app").classList.add("hidden")}
+async function showApp(){
+  $("authScreen").classList.add("hidden");$("app").classList.remove("hidden");
+  $("todayTitle").textContent=new Intl.DateTimeFormat("fr-FR",{weekday:"long",day:"numeric",month:"long"}).format(new Date());
+  $("greeting").textContent=`Bonjour ${user.email?.split("@")[0]||""} 👋`;
+  $("entryDate").value=today();
+  await refreshDashboard(); await loadDay(); await loadHistory();
+}
+function switchSection(name){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  $(`${name}Section`).classList.add("active");
+  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.section===name));
+  if(name==="dashboard") refreshDashboard();
+  if(name==="entry") loadDay();
+  if(name==="history") loadHistory();
+}
+document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>switchSection(b.dataset.section));
+$("quickAdd").onclick=()=>switchSection("entry");
+$("logoutBtn").onclick=()=>db.auth.signOut();
+$("themeBtn").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem("fit-dark",document.body.classList.contains("dark"))};
+if(localStorage.getItem("fit-dark")==="true")document.body.classList.add("dark");
+
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
+  authMode=t.dataset.auth;$("authSubmit").textContent=authMode==="login"?"Se connecter":"Créer mon compte";
+});
+$("authForm").onsubmit=async e=>{
+  e.preventDefault();$("authMessage").textContent="Chargement…";
+  const email=$("email").value.trim(), password=$("password").value;
+  let r=authMode==="login"?await db.auth.signInWithPassword({email,password}):await db.auth.signUp({email,password});
+  if(r.error){$("authMessage").textContent=r.error.message;return}
+  $("authMessage").textContent=authMode==="signup"?"Compte créé. Vérifie ton email si la confirmation est activée.":"Connexion réussie.";
+};
+
+async function fetchMetrics(days=selectedRange){
+  const from=new Date();from.setDate(from.getDate()-days+1);
+  const {data,error}=await db.from("daily_metrics").select("*").eq("user_id",user.id).gte("date",from.toISOString().slice(0,10)).order("date");
+  if(error) throw error;return data||[];
+}
+async function refreshDashboard(){
+  try{
+    const data=await fetchMetrics();
+    const t=data.find(x=>x.date===today())||data[data.length-1];
+    $("weightStat").textContent=t?.weight!=null?`${Number(t.weight).toFixed(1)} kg`:"—";
+    $("burnStat").textContent=t?.calories_burned!=null?`${t.calories_burned} kcal`:"—";
+    $("stepsStat").textContent=t?.steps!=null?Number(t.steps).toLocaleString("fr-FR"):"—";
+    $("sleepStat").textContent=t?.sleep_hours!=null?`${Number(t.sleep_hours).toFixed(1)} h`:"—";
+    const weights=data.filter(x=>x.weight!=null); const first=weights[0]?.weight,last=weights.at(-1)?.weight;
+    $("weightTrend").textContent=first!=null&&last!=null?`${(last-first)>=0?"+":""}${(last-first).toFixed(1)} kg sur la période`:"Pas encore de tendance";
+    $("burnAvg").textContent=avg(data,"calories_burned","kcal / jour");
+    $("stepsAvg").textContent=avg(data,"steps","pas / jour");
+    $("sleepAvg").textContent=avg(data,"sleep_hours","h / nuit");
+    $("statusLine").textContent=data.length?`${data.length} journée${data.length>1?"s":""} enregistrée${data.length>1?"s":""} sur la période`:"Commence à enregistrer ta première journée.";
+    drawCharts(data);
+  }catch(e){showToast("Erreur de chargement");console.error(e)}
+}
+function avg(a,k,s){const v=a.filter(x=>x[k]!=null).map(x=>Number(x[k]));return v.length?`${(v.reduce((a,b)=>a+b,0)/v.length).toFixed(k==="sleep_hours"?1:0)} ${s}`:"—"}
+function drawCharts(data){
+  const labels=data.map(x=>new Date(x.date+"T12:00:00").toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"}));
+  const opts=(label)=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:7}},y:{beginAtZero:false,grid:{color:"rgba(120,130,150,.12)"}}},elements:{line:{tension:.35},point:{radius:2,hoverRadius:5}}});
+  const make=(id,label,key)=>{charts[id]?.destroy();charts[id]=new Chart($(id),{type:"line",data:{labels,datasets:[{label,data:data.map(x=>x[key]),borderWidth:3,fill:false,spanGaps:true}]},options:opts(label)})};
+  make("weightChart","Poids","weight");make("burnChart","Calories","calories_burned");make("stepsChart","Pas","steps");make("sleepChart","Sommeil","sleep_hours");
+}
+document.querySelectorAll(".range").forEach(b=>b.onclick=()=>{document.querySelectorAll(".range").forEach(x=>x.classList.remove("active"));b.classList.add("active");selectedRange=Number(b.dataset.range);refreshDashboard()});
+
+async function loadDay(){
+  const d=$("entryDate").value||today(); $("entryHeading").textContent=`Données du ${fmtDate(d)}`;
+  const {data}=await db.from("daily_metrics").select("*").eq("user_id",user.id).eq("date",d).maybeSingle();
+  $("weight").value=data?.weight??"";$("caloriesIntake").value=data?.calories_intake??"";$("caloriesBurned").value=data?.calories_burned??"";$("steps").value=data?.steps??"";$("sleepHours").value=data?.sleep_hours??"";$("notes").value=data?.notes??"";
+  loadActivities(d);
+}
+$("entryDate").onchange=loadDay;
+$("prevDay").onclick=()=>moveDay(-1);$("nextDay").onclick=()=>moveDay(1);
+function moveDay(n){const d=new Date(($("entryDate").value||today())+"T12:00:00");d.setDate(d.getDate()+n);$("entryDate").value=d.toISOString().slice(0,10);loadDay()}
+$("metricsForm").onsubmit=async e=>{
+ e.preventDefault();const payload={user_id:user.id,date:$("entryDate").value,weight:num("weight"),calories_intake:int("caloriesIntake"),calories_burned:int("caloriesBurned"),steps:int("steps"),sleep_hours:num("sleepHours"),notes:$("notes").value.trim()||null};
+ const {error}=await db.from("daily_metrics").upsert(payload,{onConflict:"user_id,date"});if(error){showToast(error.message);return}showToast("Journée enregistrée ✓");refreshDashboard();loadHistory();
+};
+function num(id){const v=$(id).value;return v===""?null:Number(v)}function int(id){const v=$(id).value;return v===""?null:parseInt(v,10)}
+$("activityForm").onsubmit=async e=>{
+ e.preventDefault();const d=$("entryDate").value;
+ const {error}=await db.from("activities").insert({user_id:user.id,date:d,type:$("activityType").value.trim(),duration_minutes:int("activityDuration"),calories_burned:int("activityCalories"),notes:$("activityNotes").value.trim()||null});
+ if(error){showToast(error.message);return}$("activityForm").reset();showToast("Activité ajoutée ✓");loadActivities(d);
+};
+async function loadActivities(d){
+ const {data}=await db.from("activities").select("*").eq("user_id",user.id).eq("date",d).order("created_at",{ascending:false});
+ $("activityList").innerHTML=(data||[]).map(a=>`<div class="activity-item"><div><strong>${esc(a.type)}</strong><small>${a.duration_minutes?`${a.duration_minutes} min`:""}${a.calories_burned?` · ${a.calories_burned} kcal`:""}</small></div><div>${a.notes?`<small>${esc(a.notes)}</small>`:""}</div></div>`).join("")||`<div class="muted">Aucune activité pour cette journée.</div>`;
+}
+async function loadHistory(){
+ const {data}=await db.from("daily_metrics").select("*").eq("user_id",user.id).order("date",{ascending:false}).limit(100);
+ $("historyList").innerHTML=(data||[]).map(x=>`<div class="history-item"><div><strong>${fmtDate(x.date)}</strong><small>${x.notes?esc(x.notes):"Journée enregistrée"}</small></div><div class="history-metrics">${x.weight!=null?`<span class="metric-pill">⚖️ ${x.weight} kg</span>`:""}${x.steps!=null?`<span class="metric-pill">👟 ${Number(x.steps).toLocaleString("fr-FR")}</span>`:""}${x.calories_burned!=null?`<span class="metric-pill">🔥 ${x.calories_burned}</span>`:""}${x.sleep_hours!=null?`<span class="metric-pill">😴 ${x.sleep_hours} h</span>`:""}</div></div>`).join("")||`<div class="muted">Ton historique apparaîtra ici.</div>`;
+}
+boot();

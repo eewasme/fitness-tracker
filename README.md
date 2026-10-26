@@ -1,6 +1,14 @@
-# Fitness Tracker
-Application web de suivi personnel : poids, calories consommées/brûlées, pas, sommeil et activités sportives.
+# FitTrack V2
 
-Architecture : HTML/CSS/JavaScript + Chart.js + Supabase PostgreSQL/Auth.
+Version moderne et mobile-first du tracker fitness.
 
-Pour GitHub Pages, le fichier `index.html` doit rester à la racine du repository. `config.js` contient uniquement l'URL Supabase et la clé publishable, jamais une clé secret.
+## Déploiement
+Remplace les fichiers de ton dépôt GitHub Pages par ceux-ci :
+- index.html
+- styles.css
+- app.js
+- config.js
+
+Ne remplace pas `supabase.sql` : la V2 utilise les mêmes tables et ne supprime aucune donnée.
+
+GitHub Pages peut publier directement les fichiers statiques du dépôt. La connexion à Supabase utilise `supabase-js` côté navigateur avec la clé publishable.
